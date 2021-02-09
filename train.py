@@ -167,9 +167,11 @@ if __name__ == '__main__':
     USE_HATE_WORDS = 0
 
     TRAIN_METADATA_HATE = "hateMemesList.txt.train"
-    TRAIN_METADATA_GOOD = "redditMemesList.txt.train"
+    #TRAIN_METADATA_GOOD = "redditMemesList.txt.train"
+    TRAIN_METADATA_GOOD = "goodMemesList.txt.train"
     VALID_METADATA_HATE = "hateMemesList.txt.valid"
-    VALID_METADATA_GOOD = "redditMemesList.txt.valid"
+    #VALID_METADATA_GOOD = "redditMemesList.txt.valid"
+    VALID_METADATA_GOOD = "goodMemesList.txt.valid"
     BASE_PATH = "data/train_data"
 
     MODEL_SAVE = "models/classifier.pt"
