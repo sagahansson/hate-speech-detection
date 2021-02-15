@@ -1,21 +1,24 @@
+import sys
+sys.path.append("../..")
 import torch
 import torchvision
 from torch import nn
 from torchvision import transforms
 from torch.utils.data import DataLoader
 
-
 from module import test
-
 from pytorch_transformers import *
-
 import time
-
 from tensorboardX import SummaryWriter
-
 from tqdm import tqdm
 import numpy as np
 
+import json
+torch.cuda.empty_cache()
+
+import os
+if "models" not in os.listdir("./"):
+    os.mkdir("./models/") 
 
 class MultimodalClassifier(nn.Module):
     def __init__(self, image_feat_model, text_feat_model, TOTAL_FEATURES,
@@ -36,7 +39,7 @@ class MultimodalClassifier(nn.Module):
             nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
+            nn.ReLU(), #original
             # nn.Dropout(0.5),
             nn.Linear(hidden_size, 1),
             # nn.Softmax()
@@ -149,44 +152,59 @@ def validate(dataloader_valid, criterion, device):
 
     valid_acc = acc.float()/i
     valid_mse = loss/i
-    print('acc', acc)
-    print('i', i)
+    #print('acc', acc)
+    #print('i', i)
     return valid_acc, valid_mse
 
 
 if __name__ == '__main__':
 
-    HIDDEN_SIZE = 50
-    N_EPOCHS = 100
-    BATCH_SIZE = 25
-
+    HIDDEN_SIZE = 10
+    N_EPOCHS = 25
+    BATCH_SIZE = 50
+    
+    BASE_PATH = "../../data/data"
+    MODEL_SAVE = "models/classifier9.pt"
+    logname = "logs_final_BS25/multimodal11"
+    checkpoint = "models/classifier9.pt.best"
+    checkpoint = None
+    
     UNFREEZE_FEATURES = 999
 
     USE_IMAGE = 1
     USE_TEXT = 1
     USE_HATE_WORDS = 0
+    LR = 0.001
 
+    hp_dict = {"hid size"   : str(HIDDEN_SIZE),
+               "n epochs"   : str(N_EPOCHS),
+               "batch size" : str(BATCH_SIZE),
+               "image"      : str(USE_IMAGE),
+               "text"       : str(USE_TEXT),
+               "lr"         : str(LR)}
+    
+    with open(MODEL_SAVE + ".hp.json", "w+") as hp:
+        json.dump(hp_dict, hp) 
+    
+    
     TRAIN_METADATA_HATE = "hateMemesList.txt.train"
-    #TRAIN_METADATA_GOOD = "redditMemesList.txt.train"
+    #TRAIN_METADATA_GOOD = "redditMemesList.txt.train" ## from original code
     TRAIN_METADATA_GOOD = "goodMemesList.txt.train"
-    VALID_METADATA_HATE = "hateMemesList.txt.valid"
-    #VALID_METADATA_GOOD = "redditMemesList.txt.valid"
-    VALID_METADATA_GOOD = "goodMemesList.txt.valid"
-    BASE_PATH = "data/train_data"
+    
+    VALID_METADATA_HATE = "hateMemesList.txt.val"
+    #VALID_METADATA_GOOD = "redditMemesList.txt.valid" 
+    VALID_METADATA_GOOD = "goodMemesList.txt.val"
+    
+    TEST_METADATA_HATE = "hateMemesList.txt.test"
+    TEST_METADATA_GOOD = "goodMemesList.txt.test"
+    
 
-    MODEL_SAVE = "models/classifier.pt"
-
-    logname = "logs_final_BS25/multimodal3"
-
-    # checkpoint = "models/unsupervised_pretrain.pt"
-    checkpoint = None
 
 
     start_time = time.time()
     writer = SummaryWriter("logs/" + logname)
-
     # Configuring CUDA / CPU execution
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
     print('device: ', device)
 
     # Keywords (deprecated)
@@ -219,7 +237,8 @@ if __name__ == '__main__':
     bert_model = BertModel.from_pretrained("bert-base-multilingual-cased")
     bert_model.eval()
     bert_model.to(device)
-
+    
+    print(f"Got VGG\n Got BERT")
     # IMAGE_AND_TEXT_FEATURES = 1768
     IMAGE_FEATURES = 4096
     TEXT_FEATURES = 768
@@ -260,7 +279,7 @@ if __name__ == '__main__':
 
     dataloader_train = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=test.custom_collate)
     dataloader_valid = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=test.custom_collate)
-
+    print("Got through dataloaders, start training!")
 
     # criterion = nn.CrossEntropyLoss()
     criterion = nn.MSELoss()
@@ -269,7 +288,7 @@ if __name__ == '__main__':
     #
     # optimizer = torch.optim.SGD(parameters, lr=0.01, momentum=0.9)
     # optimizer = torch.optim.SGD(full_model.parameters(), lr=0.01, momentum=0.9)
-    optimizer = torch.optim.Adam(full_model.classifier.parameters())
+    optimizer = torch.optim.Adam(full_model.classifier.parameters(), lr=LR)
     # features_optimizer = torch.optim.Adam(feature_parameters)
     features_optimizer = torch.optim.Adam(VGG16_features.classifier.parameters())
 
@@ -281,7 +300,7 @@ if __name__ == '__main__':
     full_model.im_feat_model.train()
 
     for i in range(N_EPOCHS):
-
+        print("Epoch:", i)
         epoch_init = time.time()
         pbar = tqdm(total=DATASET_LEN)
         for batch in dataloader_train:
@@ -318,7 +337,7 @@ if __name__ == '__main__':
 
         print("Epoch time elapsed:", epoch_end - epoch_init)
 
-        print("Starting Validation")
+        print("Starting Validation!")
 
         valid_init = time.time()
 
@@ -329,13 +348,21 @@ if __name__ == '__main__':
         full_model.text_feat_model.train()
         full_model.im_feat_model.train()
         full_model.train()
-
+        
+        with open(MODEL_SAVE + ".valloss.log", "a+") as vallog:
+            vallog.write("val loss:" + str(valid_loss) + "; " + "epoch: " + str(i) + "\n")
+        
+        print(f"Validation loss: {valid_loss}")
+        print(f"Validation accuracy: {valid_acc}")
         valid_acc_np = valid_acc.cpu().numpy()
-
+        #print(type(best_acc))
+        if type(best_acc) != np.ndarray:
+            best_acc = best_acc.cpu().numpy()
+        #print(type(best_acc))
         if valid_acc_np > best_acc:
-            print("Saving full model to " + MODEL_SAVE + ".best")
-            torch.save(full_model.state_dict(), MODEL_SAVE + '.best')
-            logfile = open(MODEL_SAVE + ".best.log", "w")
+            print("Saving full model to " + "./" + MODEL_SAVE + ".best")
+            torch.save(full_model.state_dict(), "./" + MODEL_SAVE + '.best')
+            logfile = open(MODEL_SAVE + ".best.log", "a+")
             best_acc = valid_acc_np
             logfile.write("best_acc:" + str(valid_acc_np)+"\n" + "best epoch: " + str(i) + "\n")
             logfile.close()

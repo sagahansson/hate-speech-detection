@@ -3,7 +3,7 @@ from torchvision import transforms
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 import cv2
-import pytesseract
+#import pytesseract ## needed for ocr, already have captions
 import numpy as np
 import torch
 import time
@@ -184,7 +184,7 @@ class ImagesDataLoader(Dataset):
     def __getitem__(self, index):
 
         # t = time.time()
-        image_path = self.data[index][0]
+        image_path = self.data[index][0] # the 0 index is to not get 0.0 / 1.0 from love_paths / hate_paths above
 
         path = self.base_path + "/" + image_path
         text_path = path + ".ocr"
@@ -200,7 +200,8 @@ class ImagesDataLoader(Dataset):
             text = open(text_path)
             text = text.read()
         except:
-            text = pytesseract.image_to_string(image, config='--oem 1')
+            apsdmpoa
+            #text = pytesseract.image_to_string(image, config='--oem 1')
             # print("pytesseract time, ", time.time() - t)
             print("WARNING: PREVIOUS OCR EXTRACTION NOT FOUND. THIS SLOWS DOWN THE DATA LOADING by 2000%")
         text = text.replace("\n", " ")
