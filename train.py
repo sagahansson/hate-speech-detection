@@ -159,22 +159,43 @@ def validate(dataloader_valid, criterion, device):
 
 if __name__ == '__main__':
 
-    HIDDEN_SIZE = 10
-    N_EPOCHS = 25
+    HIDDEN_SIZE = 20
+    N_EPOCHS = 40
     BATCH_SIZE = 50
     
+    
     BASE_PATH = "../../data/data"
-    MODEL_SAVE = "models/classifier9.pt"
-    logname = "logs_final_BS25/multimodal11"
-    checkpoint = "models/classifier9.pt.best"
-    checkpoint = None
+    nr = 3.1
+
+    BALANCED = True
+    
+    MODEL_SAVE = "models/classifier" + str(nr) +  ".pt" 
+    logname = "logs_final_BS25/multimodal" + str(nr + 2)
     
     UNFREEZE_FEATURES = 999
 
-    USE_IMAGE = 1
+    USE_IMAGE = 0
     USE_TEXT = 1
     USE_HATE_WORDS = 0
     LR = 0.001
+    
+    if BALANCED:
+        MODEL_SAVE = "models/classifier" + str(nr) + "bal" + ".pt" 
+        logname = "logs_final_BS25/multimodal" + str(nr + 2) + "bal"
+        if not USE_IMAGE:
+            MODEL_SAVE = "models/classifier" + str(nr) + "bal" + ".no_img" + ".pt" 
+            logname = "logs_final_BS25/multimodal" + str(nr + 2) + "bal" + ".no_img"
+        if not USE_TEXT:
+            MODEL_SAVE = "models/classifier" + str(nr) + "bal" + ".no_txt" + ".pt" 
+            logname = "logs_final_BS25/multimodal" + str(nr + 2) + "bal" + ".no_txt"
+    print(f"Saving at {MODEL_SAVE}")
+            
+        
+    checkpoint = MODEL_SAVE + ".best"
+    #checkpoint = None
+
+    
+
 
     hp_dict = {"hid size"   : str(HIDDEN_SIZE),
                "n epochs"   : str(N_EPOCHS),
@@ -183,9 +204,25 @@ if __name__ == '__main__':
                "text"       : str(USE_TEXT),
                "lr"         : str(LR)}
     
-    with open(MODEL_SAVE + ".hp.json", "w+") as hp:
-        json.dump(hp_dict, hp) 
-    
+    logfiles = [os.path.join(top, file) for top, dirs, files in os.walk("models") for file in files]
+   
+    if (MODEL_SAVE + ".hp.json") not in logfiles:
+        with open(MODEL_SAVE + ".hp.json", "w") as hp:
+            json.dump(hp_dict, hp) 
+            print("Saved hyperparameters.")
+    else:
+        with open(MODEL_SAVE + ".hp.json", "r") as hps:
+            hp_dict = json.load(hps)
+
+            HIDDEN_SIZE = int(hp_dict["hid size"])
+            N_EPOCHS    = int(hp_dict["n epochs"])
+            BATCH_SIZE  = int(hp_dict["batch size"])
+            USE_IMAGE   = int(hp_dict["image"])
+            USE_TEXT    = int(hp_dict["text"])
+            LR          = float(hp_dict["lr"])
+
+            print("Loaded hyperparameters")
+
     
     TRAIN_METADATA_HATE = "hateMemesList.txt.train"
     #TRAIN_METADATA_GOOD = "redditMemesList.txt.train" ## from original code
@@ -198,9 +235,18 @@ if __name__ == '__main__':
     TEST_METADATA_HATE = "hateMemesList.txt.test"
     TEST_METADATA_GOOD = "goodMemesList.txt.test"
     
-
-
-
+    META = [TRAIN_METADATA_HATE, TRAIN_METADATA_GOOD, VALID_METADATA_HATE, VALID_METADATA_GOOD, TEST_METADATA_HATE, TEST_METADATA_GOOD]
+    
+    if BALANCED:
+        META = ["bal." + x for x in META]
+        TRAIN_METADATA_HATE = META[0]
+        TRAIN_METADATA_GOOD = META[1] 
+        VALID_METADATA_HATE = META[2]
+        VALID_METADATA_GOOD = META[3]
+        TEST_METADATA_HATE  = META[4]
+        TEST_METADATA_GOOD  = META[5]
+        print("Got balanced data")
+        
     start_time = time.time()
     writer = SummaryWriter("logs/" + logname)
     # Configuring CUDA / CPU execution
@@ -238,7 +284,7 @@ if __name__ == '__main__':
     bert_model.eval()
     bert_model.to(device)
     
-    print(f"Got VGG\n Got BERT")
+    print(f"Got VGG \nGot BERT")
     # IMAGE_AND_TEXT_FEATURES = 1768
     IMAGE_FEATURES = 4096
     TEXT_FEATURES = 768
@@ -253,8 +299,10 @@ if __name__ == '__main__':
                                       device)
 
     if checkpoint is not None:
-        full_model.load_state_dict(torch.load(checkpoint))
-
+        cp = torch.load(checkpoint)
+        full_model.load_state_dict(cp)
+        
+        
     full_model.to(device)
 
     # transform = transforms.Compose([test.Rescale((256, 256)),
@@ -269,9 +317,16 @@ if __name__ == '__main__':
                                     test.HateWordsVector(hate_list),
                                     test.Tokenize(tokenizer),
                                     test.ToTensor()])
+    
+    transformTest = transforms.Compose([test.Rescale((224, 224)),
+                                    # test.RandomCrop(224),
+                                    test.HateWordsVector(hate_list),
+                                    test.Tokenize(tokenizer),
+                                    test.ToTensor()])
 
     train_dataset = test.ImagesDataLoader(TRAIN_METADATA_GOOD, TRAIN_METADATA_HATE, BASE_PATH, transform)
     valid_dataset = test.ImagesDataLoader(VALID_METADATA_GOOD, VALID_METADATA_HATE, BASE_PATH, transformValid)
+    test_dataset = test.ImagesDataLoader(TEST_METADATA_GOOD, TEST_METADATA_HATE, BASE_PATH, transformTest)
     # train_dataset = test.ImageTextMatcherDataLoader(TRAIN_METADATA_GOOD, TRAIN_METADATA_HATE, BASE_PATH, transform)
     # valid_dataset = test.ImageTextMatcherDataLoader(VALID_METADATA_GOOD, VALID_METADATA_HATE, BASE_PATH, transformValid)
 
@@ -279,10 +334,25 @@ if __name__ == '__main__':
 
     dataloader_train = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=test.custom_collate)
     dataloader_valid = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=test.custom_collate)
-    print("Got through dataloaders, start training!")
-
-    # criterion = nn.CrossEntropyLoss()
+    dataloader_test  = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=test.custom_collate)
+    print("GOT DATA THANKS")
+        # criterion = nn.CrossEntropyLoss()
     criterion = nn.MSELoss()
+    
+    if type(checkpoint) == str:
+        print("LET'S GO TEST BRO")
+        full_model.load_state_dict(torch.load(checkpoint))
+        full_model.to(device)
+        full_model.eval()
+        full_model.text_feat_model.eval()
+        full_model.im_feat_model.eval()
+        test_acc, test_loss = validate(dataloader_test, criterion, device)
+        with open(MODEL_SAVE + ".testacc.log", "w+") as accLog:
+            accLog.write(f"Test acc: {test_acc}, \nTest_loss: {test_loss}")
+        print(f"Test acc: {test_acc}, \nTest_loss: {test_loss}")
+        alskdlaksd
+    
+    print("Got through dataloaders, start training!")
 
     # feature_parameters = list(full_model.im_feat_model.classifier.parameters()) + list(bert_model.parameters())
     #
@@ -326,8 +396,11 @@ if __name__ == '__main__':
 
             if i >= UNFREEZE_FEATURES:
                 features_optimizer.step()
+            with open(MODEL_SAVE + ".accloss.log", "a+") as accloss:
+                accloss.write("val loss:" + str(loss) + "; " + "epoch: " + str(i) + "\n")
 
             writer.add_scalar('train/mse', loss, iteration*BATCH_SIZE)
+            
             iteration += 1
 
             pbar.update(BATCH_SIZE)
@@ -356,6 +429,7 @@ if __name__ == '__main__':
         print(f"Validation accuracy: {valid_acc}")
         valid_acc_np = valid_acc.cpu().numpy()
         #print(type(best_acc))
+        torch.save(full_model.state_dict(), "./" + MODEL_SAVE)
         if type(best_acc) != np.ndarray:
             best_acc = best_acc.cpu().numpy()
         #print(type(best_acc))
