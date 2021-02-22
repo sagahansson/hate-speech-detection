@@ -14,6 +14,7 @@ from tqdm import tqdm
 import numpy as np
 
 import json
+import argparse
 torch.cuda.empty_cache()
 
 import os
@@ -158,44 +159,73 @@ def validate(dataloader_valid, criterion, device):
 
 
 if __name__ == '__main__':
+    
+    parser = argparse.ArgumentParser(description="Input bb")
+        
+    parser.add_argument("name", type=float, 
+                        help="The base name of the classifier (int).")
+    
+    parser.add_argument("--hidsize", "-HS", type=int, default=20,
+                        help="Size of hidden layers. Default: 20.")
+    
+    parser.add_argument("--epochs", type=int, default=40,
+                        help="Number of epochs to train for. Default: 40.")
+    
+    parser.add_argument("--batchsize", "-BS", type=int, default=50, 
+                        help="Size of the batches. Default: 50.")
+    
+    parser.add_argument("--balanced", "-B", dest="balanced", type=int, default=1, choices=[0, 1], 
+                        help="Whether or not to use balanced data; 0 = no, 1 = yes. Default: 1.")
+    
+    parser.add_argument("--test", "-T", dest="test", type=int, default=0, choices=[0, 1],  
+                        help="Whether or not to test; 0 = No, 1 = Yes. Default: 0.")
+    
+    parser.add_argument("--img", dest="img", type=int, default=1, choices=[0, 1],  
+                        help="Whether or not to use image as feature; 0 = No, 1 = Yes. Default: 1.")
+    
+    parser.add_argument("--txt", dest="txt", type=int, default=1, choices=[0, 1],  
+                        help="Whether or not to use text as feature; 0 = No, 1 = Yes. Default: 1.")
+    
+    parser.add_argument("--lr", dest="lr", type=float, default=0.001,  
+                        help="Rate at which the model learns. Default: 0.001.")
 
-    HIDDEN_SIZE = 20
-    N_EPOCHS = 40
-    BATCH_SIZE = 50
+    parser.add_argument("--cpt", dest="cpt", type=bool, default=False,  
+                        help="Whether or not to start from checkpoint. Default: False.")
+    
+    parser.add_argument("--dev", dest="device", type=int, default=1, choices=[0, 1, 2, 3],
+                        help="Which GPU to train on. Default: 1.")
+    
+    
+    args = parser.parse_args()
+    
+    
+    HIDDEN_SIZE = args.hidsize
+    N_EPOCHS = args.epochs
+    BATCH_SIZE = args.batchsize
     
     
     BASE_PATH = "../../data/data"
-    nr = 3.1
+    nr = args.name
 
-    BALANCED = True
+    BALANCED = args.balanced
     
-    MODEL_SAVE = "models/classifier" + str(nr) +  ".pt" 
-    logname = "logs_final_BS25/multimodal" + str(nr + 2)
+    USE_IMAGE = args.img
+    USE_TEXT = args.img
+    USE_HATE_WORDS = 0
+    LR = args.lr
+    
+    MODEL_SAVE = "models/clf" + str(nr) + "." + str(USE_IMAGE) + str(USE_TEXT) + ".pt" if BALANCED == 0 else "models/clf" + str(nr) + ".b" + str(USE_IMAGE) + str(USE_TEXT) + ".pt"
+    logname = "logs_new/" + MODEL_SAVE.split("/")[1]
+    
+    print(f"Model save location: {MODEL_SAVE}")
     
     UNFREEZE_FEATURES = 999
-
-    USE_IMAGE = 0
-    USE_TEXT = 1
-    USE_HATE_WORDS = 0
-    LR = 0.001
-    
-    if BALANCED:
-        MODEL_SAVE = "models/classifier" + str(nr) + "bal" + ".pt" 
-        logname = "logs_final_BS25/multimodal" + str(nr + 2) + "bal"
-        if not USE_IMAGE:
-            MODEL_SAVE = "models/classifier" + str(nr) + "bal" + ".no_img" + ".pt" 
-            logname = "logs_final_BS25/multimodal" + str(nr + 2) + "bal" + ".no_img"
-        if not USE_TEXT:
-            MODEL_SAVE = "models/classifier" + str(nr) + "bal" + ".no_txt" + ".pt" 
-            logname = "logs_final_BS25/multimodal" + str(nr + 2) + "bal" + ".no_txt"
-    print(f"Saving at {MODEL_SAVE}")
             
-        
-    checkpoint = MODEL_SAVE + ".best"
-    #checkpoint = None
-
-    
-
+    checkpoint = None    
+    if args.cpt:
+        checkpoint = MODEL_SAVE + ".best"
+        print("Loading from checkpoint.")
+    pdsofja
 
     hp_dict = {"hid size"   : str(HIDDEN_SIZE),
                "n epochs"   : str(N_EPOCHS),
@@ -250,7 +280,7 @@ if __name__ == '__main__':
     start_time = time.time()
     writer = SummaryWriter("logs/" + logname)
     # Configuring CUDA / CPU execution
-    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+    device = torch.device(("cuda:" + args.device) if torch.cuda.is_available() else 'cpu')
     print('device: ', device)
 
     # Keywords (deprecated)
@@ -339,7 +369,7 @@ if __name__ == '__main__':
         # criterion = nn.CrossEntropyLoss()
     criterion = nn.MSELoss()
     
-    if type(checkpoint) == str:
+    if test:
         print("LET'S GO TEST BRO")
         full_model.load_state_dict(torch.load(checkpoint))
         full_model.to(device)
