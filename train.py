@@ -160,7 +160,7 @@ def validate(dataloader_valid, criterion, device):
 
 if __name__ == '__main__':
     
-    parser = argparse.ArgumentParser(description="Input bb")
+    parser = argparse.ArgumentParser(description="Input name and hyperparameters of the model.")
         
     parser.add_argument("name", type=float, 
                         help="The base name of the classifier (int).")
@@ -168,7 +168,7 @@ if __name__ == '__main__':
     parser.add_argument("--hidsize", "-HS", type=int, default=20,
                         help="Size of hidden layers. Default: 20.")
     
-    parser.add_argument("--epochs", type=int, default=40,
+    parser.add_argument("--epochs", "-E", type=int, default=40,
                         help="Number of epochs to train for. Default: 40.")
     
     parser.add_argument("--batchsize", "-BS", type=int, default=50, 
@@ -177,7 +177,7 @@ if __name__ == '__main__':
     parser.add_argument("--balanced", "-B", dest="balanced", type=int, default=1, choices=[0, 1], 
                         help="Whether or not to use balanced data; 0 = no, 1 = yes. Default: 1.")
     
-    parser.add_argument("--test", "-T", dest="test", type=int, default=0, choices=[0, 1],  
+    parser.add_argument("--test", "-T", dest="tst", type=int, default=0, choices=[0, 1],  
                         help="Whether or not to test; 0 = No, 1 = Yes. Default: 0.")
     
     parser.add_argument("--img", dest="img", type=int, default=1, choices=[0, 1],  
@@ -199,10 +199,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     
+    TEST_BIN = args.tst
     HIDDEN_SIZE = args.hidsize
     N_EPOCHS = args.epochs
     BATCH_SIZE = args.batchsize
-    
+    print("test: ", TEST_BIN)
     
     BASE_PATH = "../../data/data"
     nr = args.name
@@ -225,7 +226,6 @@ if __name__ == '__main__':
     if args.cpt:
         checkpoint = MODEL_SAVE + ".best"
         print("Loading from checkpoint.")
-    pdsofja
 
     hp_dict = {"hid size"   : str(HIDDEN_SIZE),
                "n epochs"   : str(N_EPOCHS),
@@ -280,7 +280,7 @@ if __name__ == '__main__':
     start_time = time.time()
     writer = SummaryWriter("logs/" + logname)
     # Configuring CUDA / CPU execution
-    device = torch.device(("cuda:" + args.device) if torch.cuda.is_available() else 'cpu')
+    device = torch.device(("cuda:" + str(args.device)) if torch.cuda.is_available() else 'cpu')
     print('device: ', device)
 
     # Keywords (deprecated)
@@ -369,7 +369,7 @@ if __name__ == '__main__':
         # criterion = nn.CrossEntropyLoss()
     criterion = nn.MSELoss()
     
-    if test:
+    if TEST_BIN:
         print("LET'S GO TEST BRO")
         full_model.load_state_dict(torch.load(checkpoint))
         full_model.to(device)
@@ -464,6 +464,7 @@ if __name__ == '__main__':
             best_acc = best_acc.cpu().numpy()
         #print(type(best_acc))
         if valid_acc_np > best_acc:
+            #best_epoch = i
             print("Saving full model to " + "./" + MODEL_SAVE + ".best")
             torch.save(full_model.state_dict(), "./" + MODEL_SAVE + '.best')
             logfile = open(MODEL_SAVE + ".best.log", "a+")
@@ -471,6 +472,10 @@ if __name__ == '__main__':
             logfile.write("best_acc:" + str(valid_acc_np)+"\n" + "best epoch: " + str(i) + "\n")
             logfile.close()
             best_acc = valid_acc
+#        else: # honestly not sure what ive done here but im leaving it until i remember 
+#            diff = i - best_epoch
+#            if diff > 5: 
+                
 
             accs = open("results/accuracys", "w")
 
