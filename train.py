@@ -211,7 +211,7 @@ if __name__ == '__main__':
     BALANCED = args.balanced
     
     USE_IMAGE = args.img
-    USE_TEXT = args.img
+    USE_TEXT = args.txt
     USE_HATE_WORDS = 0
     LR = args.lr
     
@@ -426,8 +426,8 @@ if __name__ == '__main__':
 
             if i >= UNFREEZE_FEATURES:
                 features_optimizer.step()
-            with open(MODEL_SAVE + ".accloss.log", "a+") as accloss:
-                accloss.write("val loss:" + str(loss) + "; " + "epoch: " + str(i) + "\n")
+            with open(MODEL_SAVE + ".valloss.log", "a+") as valloss:
+                valloss.write("val loss:" + str(loss) + "; " + "epoch: " + str(i) + "\n")
 
             writer.add_scalar('train/mse', loss, iteration*BATCH_SIZE)
             
@@ -477,7 +477,7 @@ if __name__ == '__main__':
 #            if diff > 5: 
                 
 
-            accs = open("results/accuracys", "w")
+            accs = open(f"results/{MODEL_SAVE}.accuracys", "w")
 
             accs.write("Smaller losses from best acc (epoch : " + str(i) + ")\n")
 
