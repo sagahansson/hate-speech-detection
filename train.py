@@ -189,8 +189,8 @@ if __name__ == '__main__':
     parser.add_argument("--lr", dest="lr", type=float, default=0.001,  
                         help="Rate at which the model learns. Default: 0.001.")
 
-    parser.add_argument("--cpt", dest="cpt", type=bool, default=False,  
-                        help="Whether or not to start from checkpoint. Default: False.")
+    parser.add_argument("--cpt", dest="cpt", type=int, default=0, choices=[0,1], 
+                        help="Whether or not to start from checkpoint. Default: 0.")
     
     parser.add_argument("--dev", dest="device", type=int, default=1, choices=[0, 1, 2, 3],
                         help="Which GPU to train on. Default: 1.")
@@ -255,11 +255,9 @@ if __name__ == '__main__':
 
     
     TRAIN_METADATA_HATE = "hateMemesList.txt.train"
-    #TRAIN_METADATA_GOOD = "redditMemesList.txt.train" ## from original code
     TRAIN_METADATA_GOOD = "goodMemesList.txt.train"
     
     VALID_METADATA_HATE = "hateMemesList.txt.val"
-    #VALID_METADATA_GOOD = "redditMemesList.txt.valid" 
     VALID_METADATA_GOOD = "goodMemesList.txt.val"
     
     TEST_METADATA_HATE = "hateMemesList.txt.test"
@@ -275,10 +273,11 @@ if __name__ == '__main__':
         VALID_METADATA_GOOD = META[3]
         TEST_METADATA_HATE  = META[4]
         TEST_METADATA_GOOD  = META[5]
-        print("Got balanced data")
+        print("Using balanced data")
         
     start_time = time.time()
     writer = SummaryWriter("logs/" + logname)
+    
     # Configuring CUDA / CPU execution
     device = torch.device(("cuda:" + str(args.device)) if torch.cuda.is_available() else 'cpu')
     print('device: ', device)
@@ -357,20 +356,19 @@ if __name__ == '__main__':
     train_dataset = test.ImagesDataLoader(TRAIN_METADATA_GOOD, TRAIN_METADATA_HATE, BASE_PATH, transform)
     valid_dataset = test.ImagesDataLoader(VALID_METADATA_GOOD, VALID_METADATA_HATE, BASE_PATH, transformValid)
     test_dataset = test.ImagesDataLoader(TEST_METADATA_GOOD, TEST_METADATA_HATE, BASE_PATH, transformTest)
-    # train_dataset = test.ImageTextMatcherDataLoader(TRAIN_METADATA_GOOD, TRAIN_METADATA_HATE, BASE_PATH, transform)
-    # valid_dataset = test.ImageTextMatcherDataLoader(VALID_METADATA_GOOD, VALID_METADATA_HATE, BASE_PATH, transformValid)
 
     DATASET_LEN = train_dataset.__len__()
 
     dataloader_train = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=test.custom_collate)
     dataloader_valid = DataLoader(valid_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=test.custom_collate)
     dataloader_test  = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=test.custom_collate)
-    print("GOT DATA THANKS")
+    print("GOT DATA")
+    
         # criterion = nn.CrossEntropyLoss()
     criterion = nn.MSELoss()
     
     if TEST_BIN:
-        print("LET'S GO TEST BRO")
+        print("TESTING")
         full_model.load_state_dict(torch.load(checkpoint))
         full_model.to(device)
         full_model.eval()
@@ -380,7 +378,7 @@ if __name__ == '__main__':
         with open(MODEL_SAVE + ".testacc.log", "w+") as accLog:
             accLog.write(f"Test acc: {test_acc}, \nTest_loss: {test_loss}")
         print(f"Test acc: {test_acc}, \nTest_loss: {test_loss}")
-        alskdlaksd
+        sys.exit()
     
     print("Got through dataloaders, start training!")
 
@@ -472,9 +470,6 @@ if __name__ == '__main__':
             logfile.write("best_acc:" + str(valid_acc_np)+"\n" + "best epoch: " + str(i) + "\n")
             logfile.close()
             best_acc = valid_acc
-#        else: # honestly not sure what ive done here but im leaving it until i remember 
-#            diff = i - best_epoch
-#            if diff > 5: 
                 
 
             accs = open(f"results/{MODEL_SAVE}.accuracys", "w")
